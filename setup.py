@@ -1,3 +1,5 @@
+"""setup file to define the package for PyPI"""
+
 from setuptools import setup, find_packages
 
 setup(
