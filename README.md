@@ -10,7 +10,7 @@ A high-performance, memory-efficient library for numeric data manipulation with 
 
 ## Installation
 
-To install Numdrift, use pip: 
+To install numdrift, use pip: 
 ```shell script
 pip install numdrift
 ```
