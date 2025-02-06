@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 setup(
     name='numdrift',
     version='0.1.0',
-    description='A high-performance, memory-efficient library for numeric data manipulation with native missing data support.',
+    description='A high-performance, memory-efficient library for numeric data manipulation.',
     author='Udayan Sawant',
     author_email='udayansawant7@gmail.com',
     url='https://github.com/sawantudayan/numdrift',
