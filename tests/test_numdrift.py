@@ -65,5 +65,23 @@ class TestMDArray(unittest.TestCase):
         self.assertTrue(np.isnan(np_arr[2]))
 
 
+    def test_elementwise_addition(self):
+        """Test element-wise addition with missing values."""
+        arr1 = mdarray([1, 2, None, 4, 5])
+        arr2 = mdarray([5, None, 3, 2, 1])
+        result = arr1.add(arr2)
+        expected = [6, np.nan, np.nan, 6, 6]
+        np.testing.assert_array_equal(result.to_numpy(), expected)
+
+
+    def test_elementwise_multiplication(self):
+        """Test element-wise multiplication with missing values."""
+        arr1 = mdarray([1, 2, None, 4, 5])
+        arr2 = mdarray([5, None, 3, 2, 1])
+        result = arr1.multiply(arr2)
+        expected = [5, np.nan, np.nan, 8, 5]
+        np.testing.assert_array_equal(result.to_numpy(), expected
+
+
 if __name__ == '__main__':
     unittest.main()
