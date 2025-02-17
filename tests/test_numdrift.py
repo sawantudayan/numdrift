@@ -19,8 +19,18 @@ class TestMDArray(unittest.TestCase):
     def test_array_creation(self):
         """Test mdarray initialization and missing value handling."""
         arr = mdarray([1, 2, MISSING_VALUE, 4, 5])
-        self.assertEqual(arr.data.tolist(), [1, 2, 0, 4, 5])
-        self.assertTrue(arr.mask[2])
+    
+        # Use np.isnan to check if the values are NaN
+        data = arr.data.tolist()
+        self.assertEqual(data[0], 1.0)
+        self.assertEqual(data[1], 2.0)
+        self.assertTrue(np.isnan(data[2]))  # Check that this value is NaN
+        self.assertEqual(data[3], 4.0)
+        self.assertEqual(data[4], 5.0)
+
+        self.assertTrue(arr.mask[2])  # Check that the mask is True for the missing value
+
+
 
     def test_indexing(self):
         """Test correct indexing behavior, including missing values."""
@@ -32,8 +42,17 @@ class TestMDArray(unittest.TestCase):
         """Test slicing functionality, ensuring missing value masks are preserved."""
         arr = mdarray([1, 2, MISSING_VALUE, 4, 5])
         sliced = arr.slice(1, 4)
-        self.assertEqual(sliced.data.tolist(), [2, 0, 4])
-        self.assertTrue(sliced.mask[1])
+    
+        # Check that the missing value is NaN
+        sliced_data = sliced.data.tolist()
+        self.assertEqual(sliced_data[0], 2.0)
+        self.assertTrue(np.isnan(sliced_data[1]))  # Expect NaN for missing value
+        self.assertEqual(sliced_data[2], 4.0)
+    
+        # Check that the mask is preserved
+        self.assertTrue(sliced.mask[1])  # Ensure mask is True for the missing value
+
+
 
     def test_setitem(self):
         """Test setting values in mdarray, including handling of missing values."""
@@ -55,6 +74,7 @@ class TestMDArray(unittest.TestCase):
         expected = np.array([6, np.nan, np.nan, 6, 6])
 
         np.testing.assert_array_almost_equal(result.to_numpy(), expected, decimal=5)
+
 
     def test_elementwise_multiplication(self):
         """Test element-wise multiplication with missing values."""
@@ -83,6 +103,7 @@ class TestMDArray(unittest.TestCase):
 
         np.testing.assert_array_almost_equal(result.to_numpy(), expected, decimal=5)
 
+        
     def test_log_function(self):
         """Test logarithm function application while preserving missing values."""
         arr = mdarray([1, np.e, MISSING_VALUE, 10])
@@ -91,6 +112,7 @@ class TestMDArray(unittest.TestCase):
 
         np.testing.assert_array_almost_equal(result.to_numpy(), expected, decimal=5)
 
+
     def test_exp_function(self):
         """Test exponential function application while preserving missing values."""
         arr = mdarray([0, 1, MISSING_VALUE, 2])
@@ -98,6 +120,7 @@ class TestMDArray(unittest.TestCase):
         expected = np.array([1, np.e, np.nan, np.exp(2)])
 
         np.testing.assert_array_almost_equal(result.to_numpy(), expected, decimal=5)
+
 
     def test_trigonometric_functions(self):
         """Test sine and cosine functions with missing values."""
@@ -110,6 +133,23 @@ class TestMDArray(unittest.TestCase):
 
         np.testing.assert_array_almost_equal(sin_result.to_numpy(), expected_sin, decimal=5)
         np.testing.assert_array_almost_equal(cos_result.to_numpy(), expected_cos, decimal=5)
+        
+    
+    def test_statistics_operations(self):
+        """Test statistical functions including mean, std, min, max, median, variance, and percentiles."""
+        arr = mdarray([10, 20, 30, MISSING_VALUE, 50])
+
+        self.assertAlmostEqual(arr.mean(), np.mean([10, 20, 30, 50]), places=5)
+        self.assertAlmostEqual(arr.std(), np.std([10, 20, 30, 50]), places=5)
+        self.assertEqual(arr.min(), 10)
+        self.assertEqual(arr.max(), 50)
+        self.assertAlmostEqual(arr.median(), np.median([10, 20, 30, 50]), places=5)
+        self.assertAlmostEqual(arr.variance(), np.var([10, 20, 30, 50]), places=5)
+
+        # Test percentiles
+        self.assertAlmostEqual(arr.percentile(25), np.percentile([10, 20, 30, 50], 25), places=5)
+        self.assertAlmostEqual(arr.percentile(50), np.percentile([10, 20, 30, 50], 50), places=5)
+        self.assertAlmostEqual(arr.percentile(75), np.percentile([10, 20, 30, 50], 75), places=5)
 
 
 if __name__ == '__main__':
