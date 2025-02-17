@@ -1,7 +1,10 @@
 import numpy as np
 import numba as nb
+from numba import float64, boolean
+from numba import njit
 
-MISSING_VALUE = object()  # Unique object for missing values
+
+MISSING_VALUE = np.nan
 
 
 class mdarray:
@@ -18,9 +21,9 @@ class mdarray:
         - dtype: optional, specifies the data type
         - missing_value: placeholder for missing values (default: custom object)
         """
+        self.data = np.array(data)  # Store the data
+        self.mask = np.isnan(self.data)  # Mask for missing values
         self.missing_value = missing_value
-        self.data = np.array(data, dtype=dtype if dtype else self._infer_dtype(data))
-        self.mask = np.array([x is missing_value for x in data], dtype=bool)
 
     def _infer_dtype(self, data):
         """Infer the data type, ensuring missing values are handled correctly."""
@@ -33,10 +36,11 @@ class mdarray:
         return f"mdarray(data={self.data}, mask={self.mask})"
 
     def __getitem__(self, index):
-        """Retrieve elements with support for missing data."""
+        """Retrieve elements with missing value support."""
         if isinstance(index, int):
             return None if self.mask[index] else self.data[index]
-        return mdarray(self.data[index], missing_value=self.missing_value)
+        return mdarray(self.data[index], dtype=self.data.dtype, missing_value=self.missing_value)
+
 
     def __setitem__(self, index, value):
         """Assign values while handling missing data."""
@@ -57,51 +61,52 @@ class mdarray:
         arr[self.mask] = np.nan
         return arr
 
-    # ------------------------- Optimized Element-wise Operations -------------------------
+# ------------------------- Numba-optimized Helper Functions -------------------------
+    @staticmethod
+    @nb.njit
+    def _elementwise_add(arr1, arr2, mask1, mask2):
+        """Perform element-wise addition."""
+        result = np.empty_like(arr1, dtype=np.float64)  # Ensure using correct dtype
+        for i in range(len(arr1)):
+            if mask1[i] or mask2[i]:
+                result[i] = np.nan  # Explicitly handle the NaN case
+            else:
+                result[i] = arr1[i] + arr2[i]
+        return result
+    
 
+    @nb.njit
+    def _elementwise_multiply(arr1, arr2, mask1, mask2):
+        result = np.empty_like(arr1, dtype=np.float64)
+        for i in range(len(arr1)):
+            if mask1[i] or mask2[i]:
+                result[i] = np.nan
+            else:
+                result[i] = arr1[i] * arr2[i]
+        return result
+
+    @nb.njit
+    def _apply_func(arr, mask, func):
+        """Numba-optimized function application, preserving missing values."""
+        result = np.empty_like(arr, dtype=np.float64)
+        for i in range(len(arr)):
+            result[i] = np.nan if mask[i] else func(arr[i])
+        return result
+    
+    
+# ------------------------- Optimized Element-wise Operations -------------------------
+    
     def add(self, other):
         """Element-wise addition with missing data handling."""
-        result_data = _elementwise_add(self.data, other.data, self.mask, other.mask)
+        result_data = self._elementwise_add(self.data, other.data, self.mask, other.mask)
         new_mask = self.mask | other.mask
         return mdarray(result_data, missing_value=self.missing_value)
 
     def multiply(self, other):
         """Element-wise multiplication with missing data handling."""
-        result_data = _elementwise_multiply(self.data, other.data, self.mask, other.mask)
+        result_data = self._elementwise_multiply(self.data, other.data, self.mask, other.mask)
         new_mask = self.mask | other.mask
         return mdarray(result_data, missing_value=self.missing_value)
-
-# ------------------------- Numba-optimized Helper Functions -------------------------
-
-@nb.njit
-def _elementwise_add(arr1, arr2, mask1, mask2):
-    """Numba-optimized element-wise addition, handling missing values."""
-    result = np.empty_like(arr1, dtype=np.float64)
-    for i in range(len(arr1)):
-        if mask1[i] or mask2[i]:
-            result[i] = np.nan  # Handle missing values
-        else:
-            result[i] = arr1[i] + arr2[i]
-    return result
-
-@nb.njit
-def _elementwise_multiply(arr1, arr2, mask1, mask2):
-    """Numba-optimized element-wise multiplication, handling missing values."""
-    result = np.empty_like(arr1, dtype=np.float64)
-    for i in range(len(arr1)):
-        if mask1[i] or mask2[i]:
-            result[i] = np.nan  # Handle missing values
-        else:
-            result[i] = arr1[i] * arr2[i]
-    return result
-
-@nb.njit
-def _apply_func(arr, mask, func):
-    """Numba-optimized function application, preserving missing values."""
-    result = np.empty_like(arr, dtype=np.float64)
-    for i in range(len(arr)):
-        result[i] = np.nan if mask[i] else func(arr[i])
-    return result
 
 # ------------------------- Mathematical Functions -------------------------
 
@@ -115,7 +120,7 @@ def _apply_func(arr, mask, func):
         Returns:
         - mdarray with the function applied.
         """
-        result_data = _apply_func(self.data, self.mask, func)
+        result_data = self._apply_func(self.data, self.mask, func)
         return mdarray(result_data, missing_value=self.missing_value)
 
     def log(self):
@@ -160,3 +165,56 @@ def _apply_func(arr, mask, func):
         safe_div = np.where(other.data == 0, np.nan, self.data / other.data)
         result_data = np.where(new_mask, np.nan, safe_div)
         return mdarray(result_data, missing_value=self.missing_value)
+    
+    
+    def _elementwise_op(self, other, op):
+        """Generalized element-wise operation with missing value handling."""
+        result_data = op(self.data, other.data)
+        result_data[self.mask | other.mask] = np.nan
+        return mdarray(result_data, missing_value=self.missing_value)
+
+
+    # ------------------------- Statistical Operations -------------------------
+
+    def mean(self):
+        """Compute the mean, ignoring missing values."""
+        valid_data = self.data[~self.mask]
+        return np.nan if valid_data.size == 0 else np.mean(valid_data)
+
+    def std(self):
+        """Compute the standard deviation, ignoring missing values."""
+        valid_data = self.data[~self.mask]
+        return np.nan if valid_data.size == 0 else np.std(valid_data)
+
+    def min(self):
+        """Compute the minimum value, ignoring missing values."""
+        valid_data = self.data[~self.mask]
+        return np.nan if valid_data.size == 0 else np.min(valid_data)
+
+    def max(self):
+        """Compute the maximum value, ignoring missing values."""
+        valid_data = self.data[~self.mask]
+        return np.nan if valid_data.size == 0 else np.max(valid_data)
+
+    def median(self):
+        """Compute the median, ignoring missing values."""
+        valid_data = self.data[~self.mask]
+        return np.nan if valid_data.size == 0 else np.median(valid_data)
+
+    def variance(self):
+        """Compute the variance, ignoring missing values."""
+        valid_data = self.data[~self.mask]
+        return np.nan if valid_data.size == 0 else np.var(valid_data)
+
+    def percentile(self, q):
+        """
+        Compute the q-th percentile, ignoring missing values.
+
+        Parameters:
+        - q: float, percentile value (0-100).
+
+        Returns:
+        - The q-th percentile of the array.
+        """
+        valid_data = self.data[~self.mask]
+        return np.nan if valid_data.size == 0 else np.percentile(valid_data, q)

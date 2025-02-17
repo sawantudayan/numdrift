@@ -56,6 +56,7 @@ class TestMDArray(unittest.TestCase):
 
         np.testing.assert_array_almost_equal(result.to_numpy(), expected, decimal=5)
 
+
     def test_elementwise_multiplication(self):
         """Test element-wise multiplication with missing values."""
         arr1 = mdarray([1, 2, MISSING_VALUE, 4, 5])
@@ -110,6 +111,23 @@ class TestMDArray(unittest.TestCase):
 
         np.testing.assert_array_almost_equal(sin_result.to_numpy(), expected_sin, decimal=5)
         np.testing.assert_array_almost_equal(cos_result.to_numpy(), expected_cos, decimal=5)
+        
+    
+    def test_statistics_operations(self):
+        """Test statistical functions including mean, std, min, max, median, variance, and percentiles."""
+        arr = mdarray([10, 20, 30, MISSING_VALUE, 50])
+
+        self.assertAlmostEqual(arr.mean(), np.mean([10, 20, 30, 50]), places=5)
+        self.assertAlmostEqual(arr.std(), np.std([10, 20, 30, 50]), places=5)
+        self.assertEqual(arr.min(), 10)
+        self.assertEqual(arr.max(), 50)
+        self.assertAlmostEqual(arr.median(), np.median([10, 20, 30, 50]), places=5)
+        self.assertAlmostEqual(arr.variance(), np.var([10, 20, 30, 50]), places=5)
+
+        # Test percentiles
+        self.assertAlmostEqual(arr.percentile(25), np.percentile([10, 20, 30, 50], 25), places=5)
+        self.assertAlmostEqual(arr.percentile(50), np.percentile([10, 20, 30, 50], 50), places=5)
+        self.assertAlmostEqual(arr.percentile(75), np.percentile([10, 20, 30, 50], 75), places=5)
 
 
 if __name__ == '__main__':
