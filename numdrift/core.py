@@ -6,6 +6,9 @@ from numba import njit
 
 MISSING_VALUE = np.nan
 
+# Suppress division by zero warnings
+np.seterr(divide='ignore', invalid='ignore')
+
 
 class mdarray:
     """
@@ -74,9 +77,10 @@ class mdarray:
                 result[i] = arr1[i] + arr2[i]
         return result
     
-
+    @staticmethod
     @nb.njit
     def _elementwise_multiply(arr1, arr2, mask1, mask2):
+        """Perform element-wise multiplication."""
         result = np.empty_like(arr1, dtype=np.float64)
         for i in range(len(arr1)):
             if mask1[i] or mask2[i]:
@@ -85,12 +89,14 @@ class mdarray:
                 result[i] = arr1[i] * arr2[i]
         return result
 
-    @nb.njit
-    def _apply_func(arr, mask, func):
-        """Numba-optimized function application, preserving missing values."""
-        result = np.empty_like(arr, dtype=np.float64)
-        for i in range(len(arr)):
-            result[i] = np.nan if mask[i] else func(arr[i])
+    def _apply_func(self, data, mask, func):
+        """Apply the function element-wise while considering the mask for missing values."""
+        result = np.empty_like(data, dtype=np.float64)  # Ensure correct dtype
+        for i in range(len(data)):
+            if mask[i]:
+                result[i] = np.nan  # Handle missing values
+            else:
+                result[i] = func(data[i])  # Apply the function element-wise
         return result
     
     
@@ -123,9 +129,9 @@ class mdarray:
         result_data = self._apply_func(self.data, self.mask, func)
         return mdarray(result_data, missing_value=self.missing_value)
 
-    def log(self):
-        """Compute the natural logarithm element-wise."""
-        return self.apply_function(np.log)
+    def exp(self):
+        """Compute the exponential function element-wise."""
+        return self.apply_function(np.exp)
 
     def exp(self):
         """Compute the exponential function element-wise."""
@@ -138,6 +144,10 @@ class mdarray:
     def cos(self):
         """Compute the cosine function element-wise."""
         return self.apply_function(np.cos)
+    
+    def log(self):
+        """Compute the logarithm function element-wise."""
+        return self.apply_function(np.log)
 
 # ------------------------- Element-wise Arithmetic Operations -------------------------
 
