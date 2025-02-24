@@ -24,7 +24,7 @@ class mdarray:
         - dtype: optional, specifies the data type
         - missing_value: placeholder for missing values (default: custom object)
         """
-        self.data = np.array(data)  # Store the data
+        self.data = np.array(data, dtype=float)  # Store the data
         self.missing_value = missing_value
         
         if mask is not None:
