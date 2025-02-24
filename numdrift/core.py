@@ -98,21 +98,6 @@ class mdarray:
             else:
                 result[i] = func(data[i])  # Apply the function element-wise
         return result
-    
-    
-# ------------------------- Optimized Element-wise Operations -------------------------
-    
-    def add(self, other):
-        """Element-wise addition with missing data handling."""
-        result_data = self._elementwise_add(self.data, other.data, self.mask, other.mask)
-        new_mask = self.mask | other.mask
-        return mdarray(result_data, missing_value=self.missing_value)
-
-    def multiply(self, other):
-        """Element-wise multiplication with missing data handling."""
-        result_data = self._elementwise_multiply(self.data, other.data, self.mask, other.mask)
-        new_mask = self.mask | other.mask
-        return mdarray(result_data, missing_value=self.missing_value)
 
 # ------------------------- Mathematical Functions -------------------------
 
@@ -228,3 +213,106 @@ class mdarray:
         """
         valid_data = self.data[~self.mask]
         return np.nan if valid_data.size == 0 else np.percentile(valid_data, q)
+    
+    
+    # ------------------------- Broadcasting & Indexing Operations -------------------------
+    
+    def _prepare_operand(self, other):
+        """
+        Prepare the operand for element-wise operations, ensuring data and mask are aligned.
+
+        Parameters:
+        ----------
+        other : mdarray, array-like, or scalar
+            The operand to align for broadcasting.
+
+        Returns:
+        -------
+        tuple of np.ndarray
+            Aligned data and mask arrays for the operand.
+	    """
+        if isinstance(other, mdarray):
+            return other.data, other.mask
+        elif np.isscalar(other):
+            # Convert scalar to an array and mask as False (no missing values)
+            return np.full_like(self.data, other, dtype=float), np.full_like(self.mask, False)
+        else:
+            # Assume it's array-like (list or np.ndarray)
+            other_arr = np.array(other, dtype=float)
+            other_mask = np.isnan(other_arr)
+            return other_arr, other_mask
+    
+    
+    
+    def _broadcast_to(self, shape):
+        """
+        Broadcast the mdarray to a new shape following NumPy broadcasting rules.
+
+        Parameters:
+        - shape: tuple - Target shape to broadcast to.
+
+        Returns:
+        - mdarray: A new mdarray broadcasted to the target shape.
+        """
+        broadcasted_data = np.broadcast_to(self.data, shape)
+        broadcasted_mask = np.broadcast_to(self.mask, shape)
+        broadcasted_array = mdarray(broadcasted_data)
+        broadcasted_array.mask = broadcasted_mask
+        return broadcasted_array
+    
+    
+    
+    def _apply_elementwise_op(self, other, op):
+        """
+        Apply an element-wise operation with broadcasting, handling missing values.
+
+        Parameters:
+        ----------
+        other : mdarray, array-like, or scalar
+            The array or scalar to operate with.
+        op : function
+            The NumPy function representing the operation (e.g., np.add, np.multiply).
+
+        Returns:
+        -------
+        mdarray
+            Resulting mdarray after applying the operation.
+        """
+        other_data, other_mask = self._prepare_operand(other)
+
+        # Apply broadcasting
+        broadcasted_self_data, broadcasted_other_data = np.broadcast_arrays(self.data, other_data)
+        broadcasted_self_mask, broadcasted_other_mask = np.broadcast_arrays(self.mask, other_mask)
+
+        # Perform operation with masking
+        result_data = op(broadcasted_self_data, broadcasted_other_data).astype(float)  # Force float dtype
+        result_mask = broadcasted_self_mask | broadcasted_other_mask  # Mask where either is missing
+
+        # Assign np.nan to masked positions
+        result_data[result_mask] = np.nan
+
+        return mdarray(result_data, result_mask)
+    
+    
+    # ------------------------- Arithmetic Operations using Broadcasting -------------------------
+    
+    def add(self, other):
+        """Element-wise addition with broadcasting."""
+        return self._apply_elementwise_op(other, np.add)
+
+
+    def subtract(self, other):
+        """Element-wise subtraction with broadcasting."""
+        return self._apply_elementwise_op(other, np.subtract)
+
+
+    def multiply(self, other):
+        """Element-wise multiplication with broadcasting."""
+        return self._apply_elementwise_op(other, np.multiply)
+
+
+    def divide(self, other):
+        """Element-wise division with broadcasting."""
+        return self._apply_elementwise_op(other, np.divide)
+
+        
