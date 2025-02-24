@@ -15,7 +15,7 @@ class mdarray:
     A NumPy-like array with native missing data support and optimized operations.
     """
 
-    def __init__(self, data, dtype=None, missing_value=MISSING_VALUE):
+    def __init__(self, data, dtype=None, missing_value=MISSING_VALUE, mask=None):
         """
         Initialize the mdarray with custom missing data handling.
 
@@ -25,8 +25,17 @@ class mdarray:
         - missing_value: placeholder for missing values (default: custom object)
         """
         self.data = np.array(data)  # Store the data
-        self.mask = np.isnan(self.data)  # Mask for missing values
         self.missing_value = missing_value
+        
+        if mask is not None:
+            # Usinf provided mask
+            self.mask = mask
+        else:
+            # Generate MASK based in MISSING_VALUE
+            self.mask = np.isnan(self.data)
+            
+        # Applying MISSING_VALUE to masked positions
+        self.data[self.mask] = np.nan
 
     def _infer_dtype(self, data):
         """Infer the data type, ensuring missing values are handled correctly."""
@@ -39,20 +48,69 @@ class mdarray:
         return f"mdarray(data={self.data}, mask={self.mask})"
 
     def __getitem__(self, index):
-        """Retrieve elements with missing value support."""
-        if isinstance(index, int):
-            return None if self.mask[index] else self.data[index]
-        return mdarray(self.data[index], dtype=self.data.dtype, missing_value=self.missing_value)
+        """
+        Advanced indexing for mdarray.
+        
+        Supports slicing, fancy indexing, and boolean masking.
+
+        Parameters:
+        - index: int, slice, list, ndarray, or boolean mask.
+
+        Returns:
+        - mdarray: Subset of the original mdarray based on the index.
+        """
+        if isinstance(index, tuple):
+            # Multi-dimensional indexing
+            data = self.data[index]
+            mask = self.mask[index]
+        elif isinstance(index, (int, slice)):
+            # Simple slicing
+            data = self.data[index]
+            mask = self.mask[index]
+        elif isinstance(index, (list, np.ndarray)):
+            index = np.asarray(index)
+            if index.dtype == bool:
+                # Boolean indexing
+                data = self.data[index]
+                mask = self.mask[index]
+            else:
+                # Fancy indexing
+                data = self.data[index]
+                mask = self.mask[index]
+        else:
+            raise IndexError("Unsupported index type.")
+
+        return mdarray(data, mask=mask)
 
 
     def __setitem__(self, index, value):
-        """Assign values while handling missing data."""
-        if value is None or value is self.missing_value:
-            self.mask[index] = True
-            self.data[index] = 0  # Placeholder value
-        else:
-            self.mask[index] = False
+        """
+        Set values in mdarray using advanced indexing.
+
+        Parameters:
+        - index: int, slice, list, ndarray, or boolean mask.
+        - value: scalar or array-like to assign.
+        """
+        if isinstance(index, tuple):
             self.data[index] = value
+            if np.isnan(value):
+                self.mask[index] = True
+            else:
+                self.mask[index] = False
+        elif isinstance(index, (int, slice)):
+            self.data[index] = value
+            self.mask[index] = np.isnan(value)
+        elif isinstance(index, (list, np.ndarray)):
+            index = np.asarray(index)
+            if index.dtype == bool:
+                self.data[index] = value
+                self.mask[index] = np.isnan(value)
+            else:
+                self.data[index] = value
+                self.mask[index] = np.isnan(value)
+        else:
+            raise IndexError("Unsupported index type.")
+
 
     def slice(self, start, stop, step=1):
         """Slice the mdarray, preserving missing values."""
@@ -314,5 +372,9 @@ class mdarray:
     def divide(self, other):
         """Element-wise division with broadcasting."""
         return self._apply_elementwise_op(other, np.divide)
+    
+    
+    # ------------------------- Arithmetic Operations using Broadcasting -------------------------
+
 
         
